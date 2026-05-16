@@ -66,7 +66,20 @@ class FlashcardApp:
         
         # 初始字体大小（会根据窗口动态调整）
         self.base_font_size = 48 
-        self.autofiled_path = "flashcards.csv"
+        
+        # === 核心修改：引入历史路径记录文件 ===
+        self.history_file = "last_lexicon.txt"
+        self.autofiled_path = ""
+
+        # 启动时检查是否有上一次导入词库的历史记录
+        if os.path.exists(self.history_file):
+            try:
+                with open(self.history_file, "r", encoding="utf-8") as f:
+                    path = f.read().strip()
+                    if os.path.exists(path):
+                        self.autofiled_path = path
+            except:
+                pass
 
         self.setup_ui()
         self.bind_events()
@@ -77,7 +90,8 @@ class FlashcardApp:
         except:
             self.root.geometry("1200x800")
 
-        if os.path.exists(self.autofiled_path):
+        # 根据是否找到历史路径决定加载还是展示欢迎界面
+        if self.autofiled_path:
             self.load_csv(self.autofiled_path)
         else:
             self.refresh_ui_text()
@@ -231,6 +245,13 @@ class FlashcardApp:
             self.learned_count = self.total_count - len(self.cards)
             self.autofiled_path = filepath
             
+            # === 核心修改：只要加载成功，立刻将当前词库路径记忆到本地 ===
+            try:
+                with open(self.history_file, "w", encoding="utf-8") as f:
+                    f.write(os.path.abspath(filepath))
+            except:
+                pass
+            
             if self.cards:
                 self.next_card()
             else:
@@ -286,7 +307,15 @@ class FlashcardApp:
     def reset_progress(self):
         if messagebox.askyesno("Reset", I18N[self.lang]["reset_confirm"]):
             if os.path.exists(PROGRESS_FILE): os.remove(PROGRESS_FILE)
-            self.load_csv(self.autofiled_path)
+            # === 核心修改：如果有当前打开过的词库，才重新加载它，否则全面初始化重置 ===
+            if self.autofiled_path and os.path.exists(self.autofiled_path):
+                self.load_csv(self.autofiled_path)
+            else:
+                self.cards = []
+                self.current_card = None
+                self.learned_count = 0
+                self.total_count = 0
+                self.refresh_ui_text()
 
     def manual_import(self):
         path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
@@ -308,7 +337,7 @@ class FlashcardApp:
 if __name__ == "__main__":
     root = tk.Tk()
     
-    # === 新增这行：设置软件窗口和任务栏的图标 ===
+    # === 设置软件窗口和任务栏的图标 ===
     if os.path.exists("app_logo.ico"):
         root.iconbitmap("app_logo.ico")
         
